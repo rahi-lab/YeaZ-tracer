@@ -563,7 +563,7 @@ class LineageGuesserNN(LineageGuesser):
 		Returns
 		-------
 		features : dict (str:float),
-			features to be used by the ML model
+			features to be used by the NN model
 		"""
 		budcm_to_budpt_l = np.zeros(self.num_frames, dtype=np.float64)
 		budcm_to_candidatecm_l = np.zeros(self.num_frames, dtype=np.float64)
@@ -644,7 +644,7 @@ class LineageGuesserNN(LineageGuesser):
 		# check the bud still exists !
 		for time_id_ in frame_range:
 			if bud_id not in self.segmentation.cell_ids(time_id_):
-				raise LineageGuesserExpansionSpeed.BudVanishedException(bud_id, time_id_)
+				raise LineageGuesserNN.BudVanishedException(bud_id, time_id_)
 		selected_times = [i for i in range(time_id, time_id + num_frames_available)]
 
 		# get features for all candidates
@@ -806,7 +806,7 @@ class LineageGuesserNN(LineageGuesser):
 		# check the bud still exists !
 		for time_id_ in frame_range:
 			if bud_id not in self.segmentation.cell_ids(time_id_):
-				raise LineageGuesserExpansionSpeed.BudVanishedException(bud_id, time_id_)
+				raise LineageGuesserNN.BudVanishedException(bud_id, time_id_)
 
 		dists_all = [self._features._expansion_distance(bud_id, parent_id, time_id) for parent_id in candidate_parents]
 		# numpy.gradient can work with nan values
@@ -815,7 +815,7 @@ class LineageGuesserNN(LineageGuesser):
 
 		# test for nan values which might have propagated to final velocities (not enough valid distances !)
 		if not self.ignore_dist_nan and np.any(np.isnan(mean_vels)) > 0:
-			raise LineageGuesserExpansionSpeed.NanSpeedException(bud_id, candidate_parents[np.isnan(mean_vels)], time_id)
+			raise LineageGuesserNN.NanSpeedException(bud_id, candidate_parents[np.isnan(mean_vels)], time_id)
 
 		return candidate_parents[np.nanargmax(mean_vels)]
 

@@ -101,27 +101,6 @@ def main():
 		type=int,
 	)
 
-	# ML
-
-	parser_ml = subparsers_lineage.add_parser(
-		'ml',
-		help='Guess lineage relations by maximizing the expansion velocity of the bud with respect to the candidate parent.',
-		formatter_class=argparse.ArgumentDefaultsHelpFormatter
-	)
-	add_guesser_doc(parser_ml)
-	parser_ml.add_argument(
-		'--num_frames',
-		help='How many frames to consider to compute expansion velocity. At least 2 frames should be considered for good results',
-		default=bread.algo.lineage._lineage.LineageGuesserExpansionSpeed.num_frames,
-		type=int
-	)
-	parser_ml.add_argument(
-		'--bud_distance_max',
-		help='Maximal distance (in pixels) between points on the parent and bud contours to be considered as part of the "budding interface"',
-		default=bread.algo.lineage._lineage.LineageGuesserExpansionSpeed.bud_distance_max,
-		type=int
-	)
-
 	# Neural Network
 
 	parser_nn = subparsers_lineage.add_parser(
@@ -149,43 +128,7 @@ def main():
 		type=int
 	)
 	
-	# Expansion speed
-
-	parser_expspeed = subparsers_lineage.add_parser(
-		'expspeed',
-		help='Guess lineage relations by maximizing the expansion velocity of the bud with respect to the candidate parent.',
-		formatter_class=argparse.ArgumentDefaultsHelpFormatter
-	)
-	add_guesser_doc(parser_expspeed)
-	parser_expspeed.add_argument(
-		'--num_frames',
-		help='How many frames to consider to compute expansion velocity. At least 2 frames should be considered for good results',
-		default=bread.algo.lineage._lineage.LineageGuesserExpansionSpeed.num_frames,
-		type=int
-	)
-	parser_expspeed.add_argument(
-		'--ignore_dist_nan',
-		help='In some cases the computed expansion distance encounters an error (candidate parent flushed away, invalid contour, etc.), then the computed distance is replaced by nan for the given frame. If this happens for many frames, the computed expansion speed might be nan. Enabling this parameter ignores candidates for which the computed expansion speed is nan, otherwise raises an error.',
-		default=bread.algo.lineage._lineage.LineageGuesserExpansionSpeed.ignore_dist_nan,
-		type=bool
-	)
-	parser_expspeed.add_argument(
-		'--bud_distance_max',
-		help='Maximal distance (in pixels) between points on the parent and bud contours to be considered as part of the "budding interface"',
-		default=bread.algo.lineage._lineage.LineageGuesserExpansionSpeed.bud_distance_max,
-		type=int
-	)
-
-	# MinTheta
-
-	parser_mintheta = subparsers_lineage.add_parser(
-		'mintheta',
-		help='Guess lineage relations by minimizing the angle between the major axis of the candidates and candidate-to-bud vector.',
-		formatter_class=argparse.ArgumentDefaultsHelpFormatter
-	)
-	add_guesser_doc(parser_mintheta)
-	add_majority_vote_doc(parser_mintheta)
-
+	
 	# MinDist
 
 	parser_mindist = subparsers_lineage.add_parser(

@@ -129,7 +129,7 @@ class GuesserBudneckParams(GuesserParams):
 		self.offset_frames.setValue(LineageGuesserBudLum.offset_frames)
 		self.num_frames.setValue(LineageGuesserBudLum.num_frames)
 
-class GuesserMLParams(GuesserParams):
+class GuesserNNParams(GuesserParams):
 	def __init__(self, parent: Optional[QWidget] = None) -> None:
 		super().__init__(parent)
 
@@ -159,88 +159,8 @@ class GuesserMLParams(GuesserParams):
 
 	def initializePage(self):
 		super().initializePage()
-		self.num_frames.setValue(LineageGuesserExpansionSpeed.num_frames)
-		self.bud_distance_max.setValue(LineageGuesserExpansionSpeed.bud_distance_max)
-
-
-class GuesserExpSpeedParams(GuesserParams):
-	def __init__(self, parent: Optional[QWidget] = None) -> None:
-		super().__init__(parent)
-
-		self.num_frames = QSpinBox(self)
-		self.num_frames.setMinimum(0)
-
-		self.ignore_dist_nan = QCheckBox(self)
-
-		self.bud_distance_max = QDoubleSpinBox(self)
-		self.bud_distance_max.setSingleStep(0.5)
-
-		self.layout().addRow(
-			NameAndDescription(
-				'Number of frames',
-				'How many frames to consider to compute expansion velocity. At least 2 frames should be considered for good results. by default 5'
-			),
-			self.num_frames
-		)
-		self.layout().addRow(
-			NameAndDescription(
-				'Ignore nan distances',
-				'In some cases the computed expansion distance encounters an error (candidate parent flushed away, invalid contour, etc.), then the computed distance is replaced by nan for the given frame. If this happens for many frames, the computed expansion speed might be nan. Enabling this parameter ignores candidates for which the computed expansion speed is nan, otherwise raises an error. by default True'
-			),
-			self.ignore_dist_nan
-		)
-		self.layout().addRow(
-			NameAndDescription(
-				'Max interface distance',
-				'Maximal distance (in pixels) between points on the parent and bud contours to be considered as part of the "budding interface". by default 7'
-			),
-			self.bud_distance_max
-		)
-
-		self.registerField('num_frames', self.num_frames)
-		self.registerField('ignore_dist_nan', self.ignore_dist_nan)
-		self.registerField('bud_distance_max', self.bud_distance_max)
-
-	def initializePage(self):
-		super().initializePage()
-		self.num_frames.setValue(LineageGuesserExpansionSpeed.num_frames)
-		self.ignore_dist_nan.setChecked(LineageGuesserExpansionSpeed.ignore_dist_nan)
-		self.bud_distance_max.setValue(LineageGuesserExpansionSpeed.bud_distance_max)
-
-
-class GuesserMinThetaParams(GuesserParams):
-	def __init__(self, parent: Optional[QWidget] = None) -> None:
-		super().__init__(parent)
-
-		self.offset_frames = QSpinBox(self)
-		self.offset_frames.setMinimum(0)
-
-		self.num_frames = QSpinBox(self)
-		self.num_frames.setMinimum(0)
-
-		self.layout().addRow(
-			NameAndDescription(
-				'Offset frames',
-				'Wait this number of frames after bud appears before guessing parent. by default 0'
-			),
-			self.offset_frames
-		)
-		self.layout().addRow(
-			NameAndDescription(
-				'Number of frames',
-				'Number of frames to make guesses for after the bud has appeared. The algorithm makes a guess for each frame, then predicts a parent by majority-vote policy. by default 5'
-			),
-			self.num_frames
-		)
-
-		self.registerField('offset_frames', self.offset_frames)
-		self.registerField('num_frames', self.num_frames)
-
-	def initializePage(self):
-		super().initializePage()
-		self.offset_frames.setValue(LineageGuesserMinTheta.offset_frames)
-		self.num_frames.setValue(LineageGuesserMinTheta.num_frames)
-
+		self.num_frames.setValue(LineageGuesserNN.num_frames)
+		self.bud_distance_max.setValue(LineageGuesserNN.bud_distance_max)
 
 class GuesserMinDistanceParams(GuesserParams):
 	def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -271,7 +191,6 @@ class GuesserLaunch(QWizardPage):
 		if self.running:
 			warnings.warn('cannot launch a new guesser thread, another one is still running')
 			return
-
 		self.worker = GuesserWorker(self, self.guesser())
 		self.worker.progress.connect(self.handle_progress)
 		self.worker.result.connect(self.handle_result)
@@ -320,56 +239,21 @@ class GuesserBudneckLaunch(GuesserLaunch):
 			num_frames=self.field('num_frames')
 		)
 
-
-class GuesserExpSpeedLaunch(GuesserLaunch):
+class GuesserNNLaunch(GuesserLaunch):
 	def __init__(self, parent: Optional[QWidget] = None) -> None:
 		super().__init__(parent)
 
 	def guesser(self):
 		segmentation = APP_STATE.data.segmentation.get_segmentation(APP_STATE.values.fov)
 
-		return LineageGuesserExpansionSpeed(
-			segmentation=segmentation,
-			nn_threshold=self.field('nn_threshold'),
-			num_frames_refractory=self.field('num_frames_refractory'),
-			flexible_nn_threshold=self.field('flexible_fn_threshold'),
-			ignore_dist_nan=self.field('ignore_dist_nan'),
-			bud_distance_max=self.field('bud_distance_max'),
-		)
-
-class GuesserMLLaunch(GuesserLaunch):
-	def __init__(self, parent: Optional[QWidget] = None) -> None:
-		super().__init__(parent)
-
-	def guesser(self):
-		segmentation = APP_STATE.data.segmentation.get_segmentation(APP_STATE.values.fov)
-
-		return LineageGuesserML(
+		return LineageGuesserNN(
 			segmentation=segmentation,
 			nn_threshold=self.field('nn_threshold'),
 			num_frames_refractory=self.field('num_frames_refractory'),
 			flexible_nn_threshold=self.field('flexible_fn_threshold'),
 			bud_distance_max=self.field('bud_distance_max'),
 		)
-
-
-class GuesserMinThetaLaunch(GuesserLaunch):
-	def __init__(self, parent: Optional[QWidget] = None) -> None:
-		super().__init__(parent)
-
-	def guesser(self):
-		segmentation = APP_STATE.data.segmentation.get_segmentation(APP_STATE.values.fov)
-
-		return LineageGuesserMinTheta(
-			segmentation=segmentation,
-			nn_threshold=self.field('nn_threshold'),
-			num_frames_refractory=self.field('num_frames_refractory'),
-			flexible_nn_threshold=self.field('flexible_fn_threshold'),
-			num_frames=self.field('num_frames'),
-			offset_frames=self.field('offset_frames'),
-		)
-
-
+  
 class GuesserMinDistanceLaunch(GuesserLaunch):
 	def __init__(self, parent: Optional[QWidget] = None) -> None:
 		super().__init__(parent)
@@ -412,15 +296,9 @@ class GuesserWizard(QWizard):
 		if which == 'LineageGuesserBudLum':
 			self.addPage(GuesserBudneckParams())
 			self.addPage(GuesserBudneckLaunch())
-		elif which == 'LineageGuesserML':
-			self.addPage(GuesserMLParams())
-			self.addPage(GuesserMLLaunch())
-		elif which == 'LineageGuesserExpansionSpeed':
-			self.addPage(GuesserExpSpeedParams())
-			self.addPage(GuesserExpSpeedLaunch())
-		elif which == 'LineageGuesserMinTheta':
-			self.addPage(GuesserMinThetaParams())
-			self.addPage(GuesserMinThetaLaunch())
+		elif which == 'LineageGuesserNN':
+			self.addPage(GuesserNNParams())
+			self.addPage(GuesserNNLaunch())
 		elif which == 'LineageGuesserMinDistance':
 			self.addPage(GuesserMinDistanceParams())
 			self.addPage(GuesserMinDistanceLaunch())
