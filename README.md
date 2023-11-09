@@ -32,7 +32,3 @@ Launch the GUI using ``python -m bread.gui``.
 ## Command-line interface
 
 Launch the CLI using ``python -m bread.cli --help``.
-
-## Raw data
-
-The testing data can be downloaded at https://drive.google.com/file/d/1XcXTDPyDiBBlLeQpNFmugn3O6xVFfleU/view?usp=sharing.
