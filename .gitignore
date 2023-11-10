@@ -54,7 +54,7 @@ docs/_build/
 
 # data
 src/bread/tests/data/
-data/
+src/bread/algo/lineage/XGBoost/data/
 
 # wandb
 src/bread/tests/wandb/

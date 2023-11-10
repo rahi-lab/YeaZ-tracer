@@ -24,9 +24,6 @@ pip install -e .
 
 Launch the GUI using ``python -m bread.gui``.
 
-![bread gui](assets/gui.png)
-
-![algorithm parameter window](assets/param_budlum.png)
 
 
 ## Command-line interface
