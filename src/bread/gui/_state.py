@@ -149,6 +149,8 @@ class AppState(QObject):
 	def set_fov(self, fov: str) -> None:
 		self.values.fov = APP_STATE.data.fov_list[fov]
 		self.update_fov.emit(self.data.fov_list)
+		self.update_frames_max.emit(self.data.frames_max)
+
 
 	@Slot(float)
 	def set_opacity_segmentation(self, opacity: float) -> None:
