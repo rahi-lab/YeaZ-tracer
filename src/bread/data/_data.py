@@ -465,18 +465,22 @@ class SegmentationFile:
 			groups = list(file.keys())
 			for fov in groups:
 				if file[fov].keys():
+					keys = list(file[fov].keys())
 					# Get the frames in the FOV
-					load_frames = list(range(len(file[fov].keys())))
-					keys = [ f'T{n}' for n in load_frames ]
-					imgs = np.zeros((len(keys), *file[fov]['T0'].shape), dtype=int)
-					for i, key in enumerate(keys):
-						imgs[i] = np.array(file[fov][key])
+					numeric_times = [int(time[1:]) for time in keys]
+					load_frames = list(range(np.max(numeric_times)))
+					new_keys = [ f'T{n}' for n in load_frames ]
+					imgs = np.zeros((len(new_keys), *file[fov][keys[0]].shape), dtype=int)
+					for i, key in enumerate(new_keys):
+						if key in keys:
+							imgs[i] = np.array(file[fov][key])
 					data[fov] = Segmentation(data=imgs, fov=fov)
 				else:
-					imgs = np.zeros((len(keys), *file[fov].shape), dtype=int)
-					for i in range(file[fov].shape[0]):
-						imgs[i] = np.array(file[fov][i])
-					data[fov] = Segmentation(data=imgs, fov=fov)
+					print("this FOV is empty")
+					# imgs = np.zeros((len(keys), *file[fov].shape), dtype=int)
+					# for i in range(file[fov].shape[0]):
+					# 	imgs[i] = np.array(file[fov][i])
+					# data[fov] = Segmentation(data=imgs, fov=fov)
 		except Exception as e:
 			print("Error reading file: ", e)
 
@@ -600,9 +604,9 @@ class Contour:
 			raise Contour.InvalidContourException(mask)
 		
 		if len(contours_cv) > 1:
-			print(tim_id, cell_id)
+			print(time_id, cell_id)
 			warnings.warn(Contour.MultipleContoursWarning(len(contours_cv)))
-			print(tim_id, cell_id)
+			print(time_id, cell_id)
 
 
 		contour = max(contours_cv, key=cv.contourArea)  # return the contour with the largest area
