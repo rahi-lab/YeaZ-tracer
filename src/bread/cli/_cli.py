@@ -7,6 +7,7 @@ import bread.algo.lineage
 
 __all__ = ['main']
 
+
 def main():
 	parser = argparse.ArgumentParser(
 		prog='bread.cli',
@@ -14,8 +15,13 @@ def main():
 		formatter_class=argparse.ArgumentDefaultsHelpFormatter
 	)
 
+	subparsers_lineage = parser.add_subparsers(
+		dest='lineage_algo',
+		required=True,
+	)
+
 	parser.add_argument(
-		'--output-file',
+		'--output_file',
 		help='Path to output file (csv format)',
 		type=pathlib.Path,
 		required=True
@@ -29,10 +35,7 @@ def main():
 		default = 0
 	)
 
-	subparsers_lineage = parser.add_subparsers(
-		dest='lineage_algo',
-		required=True,
-	)
+	
 
 	def add_majority_vote_doc(parser):
 		parser.add_argument(
@@ -118,13 +121,25 @@ def main():
 	parser_nn.add_argument(
 		'--bud_distance_max',
 		help='Maximal distance (in pixels) between points on the parent and bud contours to be considered as neighbors',
-		default=bread.algo.lineage._lineage.LineageGuesserNN.bud_distance_max,
+		default=bread.algo.lineage._lineage.LineageGuesserNN.nn_threshold,
 		type=float
 	)
 	parser_nn.add_argument(
 		'--num_nn',
 		help='How many nearest neighbours to consider for each parent cell',
-		default=bread.algo.lineage._lineage.LineageGuesserNN.num_nn,
+		default=bread.algo.lineage._lineage.LineageGuesserNN.num_nn_threshold,
+		type=int
+	)
+	parser_nn.add_argument(
+		'--start_frame',
+		help='Frame to start guessing lineage from. the algorithm will start guessing from the first frame after this where a bud appears. if not indicated, start from frame zero.',
+		default=0,
+		type=int
+	)
+	parser_nn.add_argument(
+		'--end_frame',
+		help='Frame to finish guessing lineage. by default it is the last frame with segmentation.',
+		default=-1,
 		type=int
 	)
 	
@@ -142,6 +157,7 @@ def main():
 
 	args = parser.parse_args()
 	logger.debug(args)
+	
 
 	if args.lineage_algo == 'budneck':
 		from bread.algo.lineage import LineageGuesserBudLum
@@ -169,6 +185,8 @@ def main():
 			offset_frames=args.offset_frames,
 			kernel_N=args.kernel_N,
 			kernel_sigma=args.kernel_sigma,
+			start_frame=args.start_frame,
+			end_frame=args.end_frame,
 		)
 		logger.info(f'Loaded guesser {guesser}')
 
@@ -192,9 +210,11 @@ def main():
 		logger.info('Loading guesser...')
 		guesser = LineageGuesserNN(
 			segmentation=segmentation,
-			dist_threshold=args.bud_distance_max,
+			nn_threshold=args.bud_distance_max,
 			num_frames_refractory=args.num_frames_refractory,
 			num_frames=args.num_frames,
+			start_frame=args.start_frame,
+			end_frame=args.end_frame,
 		)
 		logger.info(f'Loaded guesser {guesser}')
 

@@ -51,7 +51,9 @@ class LineageGuesser(ABC):
 		After a parent cell has budded, exclude it from the parent pool in the next frames.
 		It is recommended to set it to a low estimate, as high values will cause mistakes to propagate in time.
 		A value of 0 corresponds to no refractory period.
-		by default 0.
+		by default 0.   
+    start_frame : int, optional
+    end_frame: int, optional
 	scale_length : float, optional
 		Units of the segmentation pixels, in [length unit]/px, used for feature extraction (passed to ``Features``).
 		by default 1.
@@ -66,6 +68,8 @@ class LineageGuesser(ABC):
 	num_frames_refractory: int = 0
 	scale_length: float = 1  # [length unit]/px
 	scale_time: float = 1  # [time unit]/frame
+	start_frame: int = 0
+	end_frame: int = -1
 	
 	_cellids_refractory: dict = field(init=False, repr=False, default_factory=dict)
 	_features: Features = field(init=False, repr=False)
@@ -85,7 +89,12 @@ class LineageGuesser(ABC):
 			nn_threshold=self.nn_threshold,
 			bud_distance_max=self.nn_threshold
 		)
-
+		total_num_frames = self.segmentation.data.shape[0]
+		assert self.start_frame >= 0 and self.start_frame <=total_num_frames-self.num_frames, f'start_frame must be greater or equal to zero and smaller than total_num_frames-num_frames , got start_frame={self.start_frame}'
+		if self.end_frame == -1:
+			self.end_frame = self.segmentation.data.shape[0]
+		assert self.end_frame >= 0 and self.end_frame <=total_num_frames, f'end_frame must be smaller than total_num_frames , got end_frame={self.end_frame}'
+		
 	@abstractmethod
 	def guess_parent(self, bud_id: int, time_id: int) -> int:
 		"""Guess the parent associated to a bud
@@ -104,7 +113,7 @@ class LineageGuesser(ABC):
 		"""
 		raise NotImplementedError()
 
-	def guess_lineage(self, progress_callback: Optional[Callable[[int, int], None]] = None):
+	def guess_lineage(self, progress_callback: Optional[Callable[[int, int], None]] = None,):
 		"""Guess the full lineage of a given bud.
 
 		Returns
@@ -113,12 +122,23 @@ class LineageGuesser(ABC):
 			guessed lineage
 		progress_callback: Callable[[int, int]] or None
 			callback for progress
+		start_frame: int, optional
+		end_frame: int, optional
 		"""
 
 		lineage_init: Lineage = self.segmentation.find_buds()
 		bud_ids, time_ids = lineage_init.bud_ids, lineage_init.time_ids
+		if self.end_frame == -1:
+			self.end_frame = self.segmentation.data.shape[0]
+		# Create boolean masks for filtering
+		mask = np.logical_and(time_ids >= self.start_frame, time_ids <= self.end_frame)
+
+		# Apply the masks to filter the arrays
+		bud_ids = bud_ids[mask]
+		time_ids = time_ids[mask]
 		parent_ids = np.empty_like(bud_ids, dtype=int)
 		# bud_ids, time_ids = bud_ids[time_ids > 0], time_ids[time_ids > 0]
+
 
 		for i, (bud_id, time_id) in enumerate(zip(bud_ids, time_ids)):
 			if progress_callback is not None:
@@ -247,7 +267,7 @@ class _BudneckMixin:
 class _MajorityVoteMixin:
 	"""Redefine ``guess_parent`` to use a majority vote. The method uses an abstract method ``_guess_parent_singleframe`` that needs to be implemented by subclasses"""
 
-	num_frames: int = 5
+	num_frames: int = 8
 	offset_frames: int = 0
 
 	def __post_init__(self):
@@ -337,7 +357,7 @@ class LineageGuesserBudLum(_MajorityVoteMixin, LineageGuesser, _BudneckMixin):
 		It is recommended to set it to a low estimate, as high values will cause mistakes to propagate in time.
 		A value of 0 corresponds to no refractory period.
 		by default 0.
-	num_frames : int, default 5
+	num_frames : int, default 8
 		Number of frames to watch the budneck marker channel for.
 		The algorithm makes a guess for each frame, then predicts a parent by majority-vote policy.
 	offset_frames : int, default 0
@@ -354,6 +374,8 @@ class LineageGuesserBudLum(_MajorityVoteMixin, LineageGuesser, _BudneckMixin):
 	# offset_frames: int = 0
 	kernel_N: int = 30
 	kernel_sigma: int = 1
+	start_frame: int = 0
+	end_frame: int = -1
 
 	def __post_init__(self):
 		LineageGuesser.__post_init__(self)
@@ -530,6 +552,8 @@ class LineageGuesserNN(LineageGuesser):
 	num_nn_threshold: int = 4
 	nn_threshold: float = 8.0
 	saved_model: str = None
+	start_frame: int = 0
+	end_frame: int = -1
 
 	def __post_init__(self):
 		LineageGuesser.__post_init__(self)
@@ -546,6 +570,7 @@ class LineageGuesserNN(LineageGuesser):
 			print("No model was provided")
 			# raise Exception("No model was provided")
 			# self.saved_model = os.path.join(current_dir, 'saved_models/best_model_thresh8_frame_num8_normalized_False.pth')
+			self.saved_model = '/Users/farzanehwork/Documents/codes/bread/src/bread/evaluations/best_model_with_fake_candid_thresh8_frame_num8_normalized_False.pth'
 		else:
 			self.model.load_state_dict(torch.load(self.saved_model))
 		self.features_len = int(layers[0]/4)
@@ -731,176 +756,3 @@ class LineageGuesserNN(LineageGuesser):
 		shape = arr.shape
 		new_shape = (shape[0], np.prod(shape[1:]))
 		return arr.reshape(new_shape)
-
-	"""Guess lineage relations by maximizing the expansion velocity of the bud with respect to the candidate parent.
-	
-	Parameters
-	----------
-	segmentation : Segmentation
-	nn_threshold : float, optional
-		cell masks separated by less than this threshold are considered neighbors, by default 8.0.
-	flexible_nn_threshold : bool, optional
-		If no nearest neighbours are found within the given threshold, try to find the closest one, by default False.
-	num_frames_refractory : int, optional
-		After a parent cell has budded, exclude it from the parent pool in the next frames.
-		It is recommended to set it to a low estimate, as high values will cause mistakes to propagate in time.
-		A value of 0 corresponds to no refractory period.
-		by default 0.
-	num_frames : int, optional
-		How many frames to consider to compute expansion velocity.
-		At least 2 frames should be considered for good results.
-		by default 5.
-	ignore_dist_nan : bool, optional
-		In some cases the computed expansion distance encounters an error (candidate parent flushed away, invalid contour, etc.),
-		then the computed distance is replaced by nan for the given frame.
-		If this happens for many frames, the computed expansion speed might be nan.
-		Enabling this parameter ignores candidates for which the computed expansion speed is nan, otherwise raises an error.
-		by default True.
-	bud_distance_max : float, optional
-		Maximal distance (in pixels) between points on the parent and bud contours to be considered as part of the "budding interface".
-		by default 7.
-	"""
-
-	num_frames: int = 5
-	ignore_dist_nan: bool = True
-	bud_distance_max: float = 7
-
-	class BudVanishedException(LineageException):
-		def __init__(self, bud_id: int, time_id: int):
-			super().__init__(f'Bud #{bud_id} vanished in between frame {time_id-1} to {time_id}.')
-
-	class NanSpeedException(LineageException):
-		def __init__(self, bud_id: int, parent_ids: int, time_id: int):
-			super().__init__(f'Unable to determine parent for bud #{bud_id} at frame #{time_id}. The following parent candidates caused a problem : {parent_ids}')
-
-	def __post_init__(self):
-		LineageGuesser.__post_init__(self)
-		assert self.num_frames >= 2, f'not enough consecutive frames considered for analysis, got {self.num_frames}.'
-		self._features.budding_time = self.num_frames
-		self._features.bud_distance_max = self.bud_distance_max
-
-	def guess_parent(self, bud_id: int, time_id: int) -> int:
-		"""Guess the parent associated to a bud
-
-		Parameters
-		----------
-		bud_id : int
-			id of the bud in the segmentation
-		time_id : int
-			frame index in the movie
-
-		Returns
-		-------
-		parent_id : int
-			guessed parent id
-		"""
-
-		candidate_parents = self._candidate_parents(time_id, nearest_neighbours_of=bud_id)
-		frame_range = self.segmentation.request_frame_range(time_id, time_id + self.num_frames)
-
-		if len(frame_range) < 2:
-			raise NotEnoughFramesException(bud_id, time_id, self.num_frames, len(frame_range))
-		if len(frame_range) < self.num_frames:
-			warnings.warn(NotEnoughFramesWarning(bud_id, time_id, self.num_frames, len(frame_range)))
-
-		# check the bud still exists !
-		for time_id_ in frame_range:
-			if bud_id not in self.segmentation.cell_ids(time_id_):
-				raise LineageGuesserNN.BudVanishedException(bud_id, time_id_)
-
-		dists_all = [self._features._expansion_distance(bud_id, parent_id, time_id) for parent_id in candidate_parents]
-		# numpy.gradient can work with nan values
-		# dists might contain nan values, we need to use numpy.nanmean to ignore them for the velocity computation
-		mean_vels = np.array([np.nanmean(np.gradient(dists)) for dists in dists_all])
-
-		# test for nan values which might have propagated to final velocities (not enough valid distances !)
-		if not self.ignore_dist_nan and np.any(np.isnan(mean_vels)) > 0:
-			raise LineageGuesserNN.NanSpeedException(bud_id, candidate_parents[np.isnan(mean_vels)], time_id)
-
-		return candidate_parents[np.nanargmax(mean_vels)]
-
-	"""Guess lineage relations by minimizing the angle between the major axis of the candidates and candidate-to-bud vector.
-	
-	Parameters
-	----------
-	segmentation : Segmentation
-	nn_threshold : float, optional
-		cell masks separated by less than this threshold are considered neighbors, by default 8.0.
-	flexible_nn_threshold : bool, optional
-		If no nearest neighbours are found within the given threshold, try to find the closest one, by default False.
-	num_frames_refractory : int, optional
-		After a parent cell has budded, exclude it from the parent pool in the next frames.
-		It is recommended to set it to a low estimate, as high values will cause mistakes to propagate in time.
-		A value of 0 corresponds to no refractory period.
-		by default 0.
-	num_frames : int, default 5
-		Number of frames to make guesses for after the bud has appeared.
-		The algorithm makes a guess for each frame, then predicts a parent by majority-vote policy.
-	offset_frames : int, default 0
-		Wait this number of frames after bud appears before guessing parent.
-	"""
-
-	def __post_init__(self):
-		LineageGuesser.__post_init__(self)
-
-	def _guess_parent_singleframe(self, bud_id, time_id):
-		candidate_ids = self._candidate_parents(time_id, excluded_ids=[bud_id], nearest_neighbours_of=bud_id)
-		candidate_cms = [ self._features._cm(candidate_id, time_id) for candidate_id in candidate_ids ]
-		bud_cm = self._features._cm(bud_id, time_id)
-		ellipses = [self._features._ellipse(candidate_id, time_id) for candidate_id in candidate_ids]
-		maj_axes = [np.array([np.sin(e.angle), np.cos(e.angle)]) for e in ellipses]  # WARNING : centers of mass are (y, x)
-		vecs = [bud_cm - candidate_cm for candidate_cm in candidate_cms]
-		nvecs = [vec / np.linalg.norm(vec) for vec in vecs]
-		abscosthetas = [abs(np.dot(nvec, maj_ax)) for nvec, maj_ax in zip(nvecs, maj_axes)]
-		return candidate_ids[abscosthetas.index(max(abscosthetas))]
-
-
-
-	"""Guess lineage relations by finding the cell closest to the bud, when it appears on the segmentation.
-	
-	Parameters
-	----------
-	segmentation : Segmentation
-	nn_threshold : float, optional
-		cell masks separated by less than this threshold are considered neighbors, by default 8.0.
-	flexible_nn_threshold : bool, optional
-		If no nearest neighbours are found within the given threshold, try to find the closest one, by default False.
-	num_frames_refractory : int, optional
-		After a parent cell has budded, exclude it from the parent pool in the next frames.
-		It is recommended to set it to a low estimate, as high values will cause mistakes to propagate in time.
-		A value of 0 corresponds to no refractory period.
-		by default 0.
-	"""
-
-	def __post_init__(self):
-		LineageGuesser.__post_init__(self)
-
-	def guess_parent(self, bud_id: int, time_id: int) -> int:
-		"""Guess the parent associated to a bud
-
-		Parameters
-		----------
-		bud_id : int
-			id of the bud in the segmentation
-		time_id : int
-			frame index in the movie
-
-		Returns
-		-------
-		parent_id : int
-			guessed parent id
-		"""
-		
-		candidate_ids = self._candidate_parents(time_id, excluded_ids=[bud_id], nearest_neighbours_of=bud_id)
-
-		if len(candidate_ids) == 0:
-			return Lineage.SpecialParentIDs.PARENT_OF_EXTERNAL.value
-
-		contour_bud = self._features._contour(bud_id, time_id)
-		dists = np.zeros_like(candidate_ids, dtype=float)
-
-		for i, parent_id in enumerate(candidate_ids):
-			contour_parent = self._features._contour(parent_id, time_id)
-			dists[i] = self._features._nearest_points(contour_bud, contour_parent)[-1]
-
-		return candidate_ids[np.argmin(dists)]

@@ -37,6 +37,17 @@ class GuesserParams(QWizardPage):
 		self.flexible_fn_threshold = QCheckBox(self)
 
 		self.num_frames_refractory = QSpinBox(self)
+		
+		self.start_frame = QSpinBox(self)
+		self.start_frame.setMinimum(0)
+		self.start_frame.setSingleStep(1)
+		self.start_frame.setMaximum(APP_STATE.data.segmentation.get_segmentation(APP_STATE.values.fov).data.shape[0])
+
+
+		self.end_frame = QSpinBox(self)
+		self.end_frame.setMinimum(0)
+		self.end_frame.setSingleStep(1)
+		self.end_frame.setMaximum(APP_STATE.data.segmentation.get_segmentation(APP_STATE.values.fov).data.shape[0])
 
 		self.setLayout(QFormLayout())
 		self.layout().addRow(
@@ -60,16 +71,34 @@ class GuesserParams(QWizardPage):
 			),
 			self.num_frames_refractory
 		)
+		self.layout().addRow(
+			NameAndDescription(
+				'start frame',
+				'First frame to consider for the lineage algorithm. by default 0'
+			),
+			self.start_frame
+		)
+
+		self.layout().addRow(
+			NameAndDescription(
+				'end frame',
+				'last frame to consider for the lineage algorithm. by default last frame of segmentation file'
+			),
+			self.end_frame
+		)
 
 		self.registerField('nn_threshold', self.nn_threshold)
 		self.registerField('flexible_fn_threshold', self.flexible_fn_threshold)
 		self.registerField('num_frames_refractory', self.num_frames_refractory)
+		self.registerField('start_frame', self.start_frame)
+		self.registerField('end_frame', self.end_frame)
 
 	def initializePage(self):
 		self.nn_threshold.setValue(LineageGuesser.nn_threshold)
 		self.flexible_fn_threshold.setChecked(LineageGuesser.flexible_nn_threshold)
 		self.num_frames_refractory.setValue(LineageGuesser.num_frames_refractory)
-
+		self.start_frame.setValue(LineageGuesser.start_frame)
+		self.end_frame.setValue(APP_STATE.data.segmentation.get_segmentation(APP_STATE.values.fov).data.shape[0])
 
 class GuesserBudneckParams(GuesserParams):
 	def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -136,8 +165,8 @@ class GuesserNNParams(GuesserParams):
 		self.num_frames = QSpinBox(self)
 		self.num_frames.setMinimum(0)
 
-		self.bud_distance_max = QDoubleSpinBox(self)
-		self.bud_distance_max.setSingleStep(0.5)
+		# self.bud_distance_max = QDoubleSpinBox(self)
+		# self.bud_distance_max.setSingleStep(0.5)
 
 		self.layout().addRow(
 			NameAndDescription(
@@ -146,21 +175,21 @@ class GuesserNNParams(GuesserParams):
 			),
 			self.num_frames
 		)
-		self.layout().addRow(
-			NameAndDescription(
-				'Max interface distance',
-				'Maximal distance (in pixels) between points on the parent and bud contours to be considered as part of the "budding interface". by default 7'
-			),
-			self.bud_distance_max
-		)
+		# self.layout().addRow(
+		# 	NameAndDescription(
+		# 		'Max interface distance',
+		# 		'Maximal distance (in pixels) between points on the parent and bud contours to be considered as part of the "budding interface". by default 7'
+		# 	),
+		# 	self.bud_distance_max
+		# )
 
 		self.registerField('num_frames', self.num_frames)
-		self.registerField('bud_distance_max', self.bud_distance_max)
+		# self.registerField('bud_distance_max', self.bud_distance_max)
 
 	def initializePage(self):
 		super().initializePage()
 		self.num_frames.setValue(LineageGuesserNN.num_frames)
-		self.bud_distance_max.setValue(LineageGuesserNN.bud_distance_max)
+		# self.bud_distance_max.setValue(LineageGuesserNN.bud_distance_max)
 
 class GuesserMinDistanceParams(GuesserParams):
 	def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -251,7 +280,9 @@ class GuesserNNLaunch(GuesserLaunch):
 			nn_threshold=self.field('nn_threshold'),
 			num_frames_refractory=self.field('num_frames_refractory'),
 			flexible_nn_threshold=self.field('flexible_fn_threshold'),
-			bud_distance_max=self.field('bud_distance_max'),
+			# bud_distance_max=self.field('bud_distance_max'),
+			start_frame=int(self.field('start_frame')),
+			end_frame=int(self.field('end_frame')),
 		)
   
 class GuesserMinDistanceLaunch(GuesserLaunch):
