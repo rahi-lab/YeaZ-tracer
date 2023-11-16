@@ -291,10 +291,12 @@ class Segmentation:
 	data : numpy.ndarray (shape=(T, W, H))
 		T : number of timeframes
 		W, H : shape of the images
+	preprocess : bool, optional
 	"""
 
 	data: np.ndarray
 	fov: str = field(init=True)
+	preprocess: bool = True
 
 	def __post_init__(self):
 		if self.data.ndim == 2:
@@ -302,6 +304,8 @@ class Segmentation:
 			self.data = self.data[None, ...]
 
 		assert self.data.ndim == 3
+		if self.preprocess:
+			self.remove_small_particles()
 
 	def __getitem__(self, index):
 		if self.data.shape[0] <= index:
@@ -417,6 +421,19 @@ class Segmentation:
 		"""Return a cropped version of the segmentation"""
 		return Segmentation(self.data[:, y:y+h, x:x+w])
 
+	def remove_small_particles(self, threshold:int = 9):
+		"""Remove small particles from the segmentation"""
+		for i in range(len(self)):
+			mask = self.data[i]
+			# Calculate the size of each labeled object
+			unique_labels = np.unique(mask)
+			object_sizes = ndimage.sum(np.ones_like(mask), mask, unique_labels)
+			# Create a mask to filter out small objects
+			mask_size_filter = (object_sizes >= threshold)
+
+			# Use the mask to filter out small objects
+			filtered_mask = np.where(np.isin(mask, unique_labels[mask_size_filter]), mask, 0)
+			self.data[i] = filtered_mask
 
 @dataclass
 class SegmentationFile:
@@ -549,8 +566,10 @@ class Contour:
 			super().__init__(f'OpenCV returned multiple contours, {num} found.')
 
 	def __post_init__(self):
-		assert self.data.ndim == 2, 'Contour expected data with 2 dimensions, with shape (N, 2)'
-		assert self.data.shape[1] == 2, 'Contour expected data with shape (N, 2)'
+		# assert self.data.ndim == 2, 'Contour expected data with 2 dimensions, with shape (N, 2)'
+		# assert self.data.shape[1] == 2, 'Contour expected data with shape (N, 2)'
+		if self.data.ndim != 2 or self.data.shape[1] != 2:
+			raise ValueError('Contour expected data with 2 dimensions, with shape (N, 2)')
 		
 		if not np.issubdtype(self.data.dtype, np.integer):
 			warnings.warn(f'Contour initialized with non-integer, {self.data.dtype} used.')
@@ -604,7 +623,6 @@ class Contour:
 			raise Contour.InvalidContourException(mask)
 		
 		if len(contours_cv) > 1:
-			print(time_id, cell_id)
 			warnings.warn(Contour.MultipleContoursWarning(len(contours_cv)))
 			print(time_id, cell_id)
 
