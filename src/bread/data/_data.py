@@ -1,5 +1,6 @@
 from enum import IntEnum
 import numpy as np
+from scipy import ndimage
 import scipy.ndimage, scipy.spatial
 import warnings
 import cv2 as cv
@@ -19,6 +20,7 @@ class Lineage:
 	parent_ids: np.ndarray
 	bud_ids: np.ndarray
 	time_ids: np.ndarray
+	confidence: Optional[np.ndarray] = None
 
 	class SpecialParentIDs(IntEnum):
 		"""Special parent IDs attributed in lineages to specify exceptions.
@@ -48,6 +50,7 @@ class Lineage:
 		assert self.parent_ids.ndim == 1, '`parent_ids` should have 1 dimension'
 		assert self.bud_ids.ndim == 1, '`bud_ids` should have 1 dimension'
 		assert self.time_ids.ndim == 1, '`time_ids` should have 1 dimension'
+		assert self.confidence is None or self.confidence.ndim == 1, '`confidence` should have 1 dimension'
 		assert self.parent_ids.shape == self.bud_ids.shape == self.time_ids.shape, '`parent_ids`, `bud_ids`, `time_ids` should have the same shape'
 
 		if not np.issubdtype(self.time_ids.dtype, np.integer):
@@ -80,7 +83,7 @@ class Lineage:
 			number of frames since the budding event
 		"""
 
-		parent_ids, bud_ids, time_ids = [], [], []
+		parent_ids, bud_ids, time_ids, confidence = [], [], [], []
 		dts: List[int] = []
 
 		for parent_id, bud_id, time_id in self:

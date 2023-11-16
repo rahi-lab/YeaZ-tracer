@@ -141,6 +141,8 @@ class LineageGuesser(ABC):
 		bud_ids = bud_ids[mask]
 		time_ids = time_ids[mask]
 		parent_ids = np.empty_like(bud_ids, dtype=int)
+		confidence = np.empty_like(bud_ids, dtype=int)
+
 		# bud_ids, time_ids = bud_ids[time_ids > 0], time_ids[time_ids > 0]
 
 
@@ -153,7 +155,7 @@ class LineageGuesser(ABC):
 				continue
 
 			try:
-				parent_ids[i] = self.guess_parent(int(bud_id), int(time_id))  # BUGFIX : cast to an int because indexing with numpy.uint64 raises an error
+				parent_ids[i], confidence[i] = self.guess_parent(int(bud_id), int(time_id))  # BUGFIX : cast to an int because indexing with numpy.uint64 raises an error
 				self._cellids_refractory[parent_ids[i]] = self.num_frames_refractory
 			except BreadException as e:
 				if isinstance(e, LineageGuesser.NoCandidateParentException):
@@ -166,7 +168,7 @@ class LineageGuesser(ABC):
 
 			self._decrement_refractory()
 
-		return Lineage(parent_ids, bud_ids, time_ids)
+		return Lineage(parent_ids, bud_ids, time_ids, confidence)
 
 	def _decrement_refractory(self):
 		"""Decrement the time remaining for refractory cells"""
@@ -570,8 +572,8 @@ class LineageGuesserNN(LineageGuesser):
 		if self.saved_model is None:
 			print("No model was provided")
 			# raise Exception("No model was provided")
-			# self.saved_model = os.path.join(current_dir, 'saved_models/best_model_thresh8_frame_num8_normalized_False.pth')
-			self.saved_model = '/Users/farzanehwork/Documents/codes/bread/src/bread/evaluations/best_model_with_fake_candid_thresh8_frame_num8_normalized_False.pth'
+			self.saved_model = os.path.join(current_dir, 'saved_models/best_model_with_fake_candid_thresh8_frame_num8_normalized_False.pth')
+			self.model.load_state_dict(torch.load(self.saved_model))
 		else:
 			self.model.load_state_dict(torch.load(self.saved_model))
 		self.features_len = int(layers[0]/4)
@@ -672,7 +674,7 @@ class LineageGuesserNN(LineageGuesser):
 		# check the bud still exists !
 		for time_id_ in frame_range:
 			if bud_id not in self.segmentation.cell_ids(time_id_):
-				raise LineageGuesserNN.BudVanishedException(bud_id, time_id_)
+				raise LineageGuesser.BudVanishedException(bud_id, time_id_)
 		selected_times = [i for i in range(time_id, time_id + num_frames_available)]
 
 		# get features for all candidates
@@ -684,7 +686,7 @@ class LineageGuesserNN(LineageGuesser):
 			features[c_id] = list(feature_dict.values())
 		
 		# Find the id of parent with the highest probability using the ml model
-		predicted_index = self.predict_parent(bud_id, features.reshape((1, ) + features.shape), number_of_candidates = len(candidate_parents))
+		predicted_index, confidence = self.predict_parent(bud_id, features.reshape((1, ) + features.shape), number_of_candidates = len(candidate_parents))
 		if (predicted_index>len(candidate_parents)-1):
 			if (len(candidate_parents) == 1):
 				parent = candidate_parents[0] #in case that prediction was very off, return the only candidate
@@ -692,13 +694,13 @@ class LineageGuesserNN(LineageGuesser):
 				parent = Lineage.SpecialParentIDs.NO_GUESS.value # no guess! This shouldn't happen very often
 		else:
 			parent = candidate_parents[predicted_index]
-		return parent
+		return parent, confidence
 		
 	def predict_parent(self, bud_id, batch_features, number_of_candidates = 4):
 
 		if(self.model is None):
 			raise Exception("No model was loaded")
-		
+		true_candidate_counts = batch_features.shape[1]
 		if batch_features.shape[1] <= self.num_nn_threshold:
 			# Get the number of features in the model
 			num_features = self.num_nn_threshold * self.features_len
@@ -722,8 +724,8 @@ class LineageGuesserNN(LineageGuesser):
 
 			# Predict the parent in nn model
 			outputs = self.model(X_padded)
-			_, preds = torch.max(outputs.data[:number_of_candidates], 1)
-			return int(preds)
+			_, preds = torch.max(F.softmax(outputs.data[:,:number_of_candidates]), 1)
+			return int(preds), _
 		
 		# in case we have more candidates than the threshold, we need to test all combinations of 4 candidates
 		elif batch_features.shape[1] > self.num_nn_threshold:
@@ -731,7 +733,7 @@ class LineageGuesserNN(LineageGuesser):
 			combinations = list(itertools.combinations(range(batch_features.shape[1]), 4))
 			max_count = 0
 			max_idx = 0
-			pred_list = []
+			pred_list, confidence_list = [], []
 			for i, comb in enumerate(combinations):
 				X = batch_features[:, comb]
 				X = self._flatten_3d_array(X)
@@ -745,12 +747,13 @@ class LineageGuesserNN(LineageGuesser):
 				
 				# Predict the parent in nn model
 				outputs = self.model(X_padded)
-				_, pred = torch.max(outputs.data, 1)
+				_, pred = torch.max(F.softmax(outputs.data), 1)
 				pred_list.append(pred)
-			
-			count = Counter(pred_list)
+				confidence_list.append(_)
+			int_list = [int(tensor.numpy()) for tensor in pred_list]
+			count = Counter(int_list)
 			most_common = count.most_common(1)
-			return most_common[0][0] 
+			return most_common[0][0], most_common[0][1]/len(combinations)
 	
 	def _flatten_3d_array(self,arr):
 		"""
