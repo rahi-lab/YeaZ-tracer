@@ -81,6 +81,10 @@ class LineageGuesser(ABC):
 	class NoCandidateParentException(LineageException):
 		def __init__(self, time_id: int):
 			super().__init__(f'No candidate parents have been found for in frame #{time_id}.')
+	
+	class BudVanishedException(LineageException):
+		def __init__(self,bud_id: int,time_id: int):
+			super().__init__(f'Bud #{bud_id} vanished in frame #{time_id}.')
 
 	def __post_init__(self):
 		self._features = Features(
@@ -208,6 +212,8 @@ class LineageGuesser(ABC):
 		# remove the excluded_ids
 		if excluded_ids is not None:
 			candidate_ids = np.setdiff1d(candidate_ids, excluded_ids)
+		if len(candidate_ids) == 0:
+			raise LineageGuesser.NoCandidateParentException(time_id)
 
 		# remove refractory cells
 		refractory_ids = np.array(list(self._cellids_refractory.keys()))
@@ -247,11 +253,6 @@ class LineageGuesser(ABC):
 				candidate_ids = [sorted_data[i][0] for i in range(count)]	
 			else:
 				raise ValueError(f'Invalid threshold_mode {threshold_mode}.')			
-
-
-		if len(candidate_ids) == 0:
-			# no nearest neighbours
-			raise LineageGuesser.NoCandidateParentException(time_id)
 
 		return candidate_ids
 
@@ -658,6 +659,8 @@ class LineageGuesserNN(LineageGuesser):
 
 	def guess_parent(self, bud_id, time_id):
 		candidate_parents = self._candidate_parents(time_id, nearest_neighbours_of=bud_id)
+		if len(candidate_parents) == 0:
+			raise LineageGuesser.NoCandidateParentException(time_id)
 		frame_range = self.segmentation.request_frame_range(time_id, time_id + self.num_frames)
 		num_frames_available = self.num_frames
 		if len(frame_range) < 2:
