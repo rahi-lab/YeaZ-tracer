@@ -155,7 +155,8 @@ class LineageGuesser(ABC):
 				continue
 
 			try:
-				parent_ids[i], confidence[i] = self.guess_parent(int(bud_id), int(time_id))  # BUGFIX : cast to an int because indexing with numpy.uint64 raises an error
+				parent_ids[i], conf = self.guess_parent(int(bud_id), int(time_id))  # BUGFIX : cast to an int because indexing with numpy.uint64 raises an error
+				confidence[i] = int(conf*100)
 				self._cellids_refractory[parent_ids[i]] = self.num_frames_refractory
 			except BreadException as e:
 				if isinstance(e, LineageGuesser.NoCandidateParentException):
@@ -321,6 +322,7 @@ class _MajorityVoteMixin:
 		# perform majority vote
 		values, counts = np.unique(parent_ids, return_counts=True)
 		majority_ids = values[(counts == np.max(counts))]
+		confidence = np.max(counts) / len(parent_ids)
 
 		# if vote is ambiguous, i.e. 2 or more parents have been guessed the maximum number of times
 		# then the nearest parent is returned
@@ -336,7 +338,7 @@ class _MajorityVoteMixin:
 			return majority_ids[np.argmin(dists)]
 			# warnings.warn(BreadWarning(f'Ambiguous vote for frame #{time_id}, bud #{bud_id}. Possible parents : {majority_ids}'))
 
-		return majority_ids[0]
+		return majority_ids[0], confidence
 
 	@abstractmethod
 	def _guess_parent_singleframe(self, bud_id, time_id):
@@ -662,7 +664,7 @@ class LineageGuesserNN(LineageGuesser):
 	def guess_parent(self, bud_id, time_id):
 		candidate_parents = self._candidate_parents(time_id, nearest_neighbours_of=bud_id)
 		if len(candidate_parents) == 0:
-			raise LineageGuesser.NoCandidateParentException(time_id)
+			return Lineage.SpecialParentIDs.PARENT_OF_ROOT.value
 		frame_range = self.segmentation.request_frame_range(time_id, time_id + self.num_frames)
 		num_frames_available = self.num_frames
 		if len(frame_range) < 2:
@@ -694,8 +696,9 @@ class LineageGuesserNN(LineageGuesser):
 				parent = Lineage.SpecialParentIDs.NO_GUESS.value # no guess! This shouldn't happen very often
 		else:
 			parent = candidate_parents[predicted_index]
-		return parent, confidence
 		
+		return parent, confidence
+
 	def predict_parent(self, bud_id, batch_features, number_of_candidates = 4):
 
 		if(self.model is None):

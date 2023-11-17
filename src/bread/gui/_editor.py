@@ -59,8 +59,8 @@ class EditorTab(QWidget):
 		self.rowcontrols.movedownbtn.clicked.connect(self.movedown_row)
 
 		self.table = QTableWidget(self)
-		self.table.setColumnCount(3)
-		self.table.setHorizontalHeaderLabels(['Parent', 'Bud', 'Time'])
+		self.table.setColumnCount(4)
+		self.table.setHorizontalHeaderLabels(['Parent', 'Bud', 'Time', 'confidence%'])
 		APP_STATE.update_segmentation_data.connect(self.validate_all)
 		self.table.verticalHeader().setVisible(False)
 		self.table.setSortingEnabled(False)
@@ -69,6 +69,11 @@ class EditorTab(QWidget):
 		self.table.cellChanged.connect(self.validate_cell)
 		self.table.cellChanged.connect(lambda irow, icol: self.set_dirty(True))
 		self.table.cellClicked.connect(self.handle_cell_clicked)
+  
+		self.table.setColumnWidth(0, 60)
+		self.table.setColumnWidth(1, 60)
+		self.table.setColumnWidth(2, 60)
+		self.table.setColumnWidth(3, 100)
 
 		self.setLayout(QVBoxLayout())
 		self.layout().addWidget(self.rowcontrols)
@@ -99,6 +104,7 @@ class EditorTab(QWidget):
 		self.table.setItem(irow, 0, QTableWidgetItem(''))
 		self.table.setItem(irow, 1, QTableWidgetItem(''))
 		self.table.setItem(irow, 2, QTableWidgetItem('{:d}'.format(APP_STATE.values.frame_index)))
+		self.table.setItem(irow, 3, QTableWidgetItem(''))
 
 	@Slot()
 	def moveup_row(self):
@@ -147,6 +153,7 @@ class EditorTab(QWidget):
 			valid &= self.validate_cell(irow, 0)
 			valid &= self.validate_cell(irow, 1)
 			valid &= self.validate_cell(irow, 2)
+			valid &= self.validate_cell(irow, 3)
 		return valid
 
 	@Slot(int, int)
@@ -224,30 +231,34 @@ class EditorTab(QWidget):
 		self.table.clearContents()
 		self.table.setRowCount(nrows)
 
-		for irow, (parent_id, bud_id, time_id) in enumerate(zip(lineage.parent_ids, lineage.bud_ids, lineage.time_ids)):
+		for irow, (parent_id, bud_id, time_id, confidence) in enumerate(zip(lineage.parent_ids, lineage.bud_ids, lineage.time_ids, lineage.confidence)):
 			self.table.setItem(irow, 0, QTableWidgetItem('{:d}'.format(parent_id)))
 			self.table.setItem(irow, 1, QTableWidgetItem('{:d}'.format(bud_id)))
 			self.table.setItem(irow, 2, QTableWidgetItem('{:d}'.format(time_id)))
+			self.table.setItem(irow, 3, QTableWidgetItem('{:d}'.format(confidence)))
+
 			# manually validate once the entire row is loaded
 			self.validate_cell(irow, 0)
 			self.validate_cell(irow, 1)
 			self.validate_cell(irow, 2)
+			self.validate_cell(irow, 3)
 
 		self.table.blockSignals(False)  # restore signals
 
 	def export_lineage(self):
 		N: int = self.table.rowCount()
-		parent_ids, bud_ids, time_ids = np.zeros(N, dtype=int), np.zeros(N, dtype=int), np.zeros(N, dtype=int)
+		parent_ids, bud_ids, time_ids, confidence = np.zeros(N, dtype=int), np.zeros(N, dtype=int), np.zeros(N, dtype=int), np.zeros(N, dtype=int)
 		
 		for irow in range(N):
-			values = (self.parse_cell(irow, 0), self.parse_cell(irow, 1), self.parse_cell(irow, 2))
+			values = (self.parse_cell(irow, 0), self.parse_cell(irow, 1), self.parse_cell(irow, 2), self.parse_cell(irow, 3))
 			if any(value is None for value in values):
 				raise RuntimeError('lineage is not valid')
 			parent_ids[irow] = values[0]
 			bud_ids[irow] = values[1]
 			time_ids[irow] = values[2]
+			confidence[irow] = values[3]
 		
-		return Lineage(parent_ids, bud_ids, time_ids)
+		return Lineage(parent_ids, bud_ids, time_ids, confidence)
 
 	@Slot(int, int)
 	def handle_cell_clicked(self, irow: int, icol: int):
@@ -271,7 +282,10 @@ class EditorTab(QWidget):
 			# time index
 			handle_col_time(irow, icol)
 
-	def parse_cell(self, irow, icol) -> Optional[int]:
+	def parse_cell(self, irow, icol):
+		if self.table.item(irow, icol) == None:
+			# code to execute if the condition is true
+			return 1
 		contents = self.table.item(irow, icol).text()
 		if contents == '':
 			return None

@@ -59,6 +59,8 @@ class Lineage:
 			warnings.warn(f'Lineage.bud_ids initialized with non-int, {self.bud_ids.dtype} used.')
 		if not np.issubdtype(self.parent_ids.dtype, np.integer):
 			warnings.warn(f'Lineage.parent_ids initialized with non-int, {self.parent_ids.dtype} used.')
+		if self.confidence is not None and not np.issubdtype(self.confidence.dtype, np.floating):
+			warnings.warn(f'Lineage.confidence initialized with non-float, {self.confidence.dtype} used.')
 
 	def __len__(self):
 		return len(self.time_ids)
@@ -115,6 +117,7 @@ class Lineage:
 			parent_ids=self.parent_ids[mask].copy(),
 			bud_ids=self.bud_ids[mask].copy(),
 			time_ids=self.time_ids[mask].copy(),
+			confidence=self.confidence[mask].copy() if self.confidence is not None else None
 		)
 
 	def __iter__(self) -> 'Lineage':
@@ -130,26 +133,41 @@ class Lineage:
 		return self.parent_ids[self._idx_iter-1], self.bud_ids[self._idx_iter-1], self.time_ids[self._idx_iter-1]
 
 	def save_csv(self, filepath: Path):
+		if np.all(np.equal(self.confidence, None)):
+			csv_data = np.array((self.parent_ids, self.bud_ids, self.time_ids), dtype=int).T
+			header='parent_id,bud_id,time_index'
+		else:
+			csv_data = np.array((self.parent_ids, self.bud_ids, self.time_ids, self.confidence), dtype=int).T
+			header='parent_id,bud_id,time_index,confidence%'
 		np.savetxt(
 			filepath,
-			np.array((self.parent_ids, self.bud_ids, self.time_ids), dtype=int).T,
-			delimiter=',', header='parent_id,bud_id,time_index',
+			csv_data,
+			delimiter=',', header=header,
 			fmt='%.0f'  # floating point to support nan values
 		)
 
 	@staticmethod
 	def from_csv(filepath: Path) -> 'Lineage':
-		parent_ids, bud_ids, time_ids = np.genfromtxt(filepath, skip_header=True, delimiter=',', unpack=True, dtype=int)
+		values = np.genfromtxt(filepath, skip_header=True, delimiter=',', unpack=True, dtype=int)
+		if len(values) == 3:
+			parent_ids, bud_ids, time_ids = values
+			confidence = np.array([None] * len(parent_ids))
+		elif len(values) == 4:
+			parent_ids, bud_ids, time_ids, confidence = values
 		if not isinstance(parent_ids, np.ndarray):  # in files with one line, genfromtxt returns a float, not a numpy array
 			parent_ids = np.array((parent_ids,), dtype=int)
 		if not isinstance(bud_ids, np.ndarray):  # in files with one line, genfromtxt returns a float, not a numpy array
 			bud_ids = np.array((bud_ids,), dtype=int)
 		if not isinstance(time_ids, np.ndarray):  # in files with one line, genfromtxt returns a float, not a numpy array
 			time_ids = np.array((time_ids,), dtype=int)
+		if not isinstance(confidence, np.ndarray):
+			confidence = np.array((confidence,), dtype=int)
+
 		return Lineage(
 			parent_ids=parent_ids,
 			bud_ids=bud_ids,
-			time_ids=time_ids
+			time_ids=time_ids,
+			confidence=confidence
 		)
 
 @dataclass
@@ -397,7 +415,8 @@ class Segmentation:
 		return Lineage(
 			parent_ids=np.full(len(bud_ids), Lineage.SpecialParentIDs.NO_GUESS.value, dtype=int),
 			bud_ids=np.array(bud_ids, dtype=int),
-			time_ids=np.array(time_ids, dtype=int)
+			time_ids=np.array(time_ids, dtype=int),
+			confidence=np.full(len(bud_ids), 0, dtype=int),
 		)
 
 	def request_frame_range(self, time_id_from: int, time_id_to: int):
