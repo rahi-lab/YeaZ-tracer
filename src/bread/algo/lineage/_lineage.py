@@ -664,7 +664,7 @@ class LineageGuesserNN(LineageGuesser):
 	def guess_parent(self, bud_id, time_id):
 		candidate_parents = self._candidate_parents(time_id, nearest_neighbours_of=bud_id)
 		if len(candidate_parents) == 0:
-			return Lineage.SpecialParentIDs.PARENT_OF_ROOT.value
+			return Lineage.SpecialParentIDs.PARENT_OF_ROOT.value, 1.0
 		frame_range = self.segmentation.request_frame_range(time_id, time_id + self.num_frames)
 		num_frames_available = self.num_frames
 		if len(frame_range) < 2:
